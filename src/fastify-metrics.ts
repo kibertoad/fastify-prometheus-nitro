@@ -1,39 +1,24 @@
 import {
-  FastifyInstance,
   FastifyReply,
   FastifyRequest,
   RouteOptions,
 } from 'fastify';
 import promClient, {
-  Histogram,
-  LabelValues,
   Registry,
-  Summary,
 } from 'prom-client';
-import { IFastifyMetrics, IMetricsPluginOptions } from './types';
-/**
- * Plugin constructor
- *
- * @public
- */
-interface IConstructiorDeps {
-  /** Prometheus client */
-  client: typeof promClient;
-  /** Fastify instance */
-  fastify: FastifyInstance;
-  /** Metric plugin options */
-  options: IMetricsPluginOptions;
-}
+import {IFastifyMetrics, IMetricsPluginOptions} from './types';
+import {IConstructiorDeps, IReqMetrics, IRouteMetrics} from "./types-internal";
+import {getRouteSlug, requestMetricsCollector, responseMetricsCollector} from "./metricsCollector";
 
-interface IReqMetrics<T extends string> {
-  hist: (labels?: LabelValues<T>) => number;
-  sum: (labels?: LabelValues<T>) => void;
-}
-
-interface IRouteMetrics {
-  routeHist: Histogram<string>;
-  routeSum: Summary<string>;
-  labelNames: { method: string; status: string; route: string };
+export const DEFAULT_OPTIONS: IMetricsPluginOptions = {
+  endpoint: '/metrics',
+  clearRegisterOnInit: false,
+  routeMetrics: {
+    enabled: true
+  },
+  defaultMetrics: {
+    enabled: true
+  }
 }
 
 /**
@@ -42,18 +27,15 @@ interface IRouteMetrics {
  * @public
  */
 export class FastifyMetrics implements IFastifyMetrics {
-  private static getRouteSlug(args: { method: string; url: string }): string {
-    return `[${args.method}] ${args.url}`;
-  }
-
-  private readonly metricStorage = new WeakMap<
+  public readonly metricStorage = new WeakMap<
     FastifyRequest,
     IReqMetrics<string>
   >();
-  private readonly routesWhitelist = new Set<string>();
-  private readonly methodBlacklist = new Set<string>();
+  public readonly routesWhitelist = new Set<string>();
+  public readonly methodBlacklist = new Set<string>();
 
-  private routeMetrics: IRouteMetrics;
+  public routeMetrics: IRouteMetrics;
+  public readonly options: IMetricsPluginOptions
 
   /** Prom-client instance. */
   public readonly client: typeof promClient;
@@ -61,15 +43,19 @@ export class FastifyMetrics implements IFastifyMetrics {
   /** Creates metrics collector instance */
   constructor(private readonly deps: IConstructiorDeps) {
     this.client = this.deps.client;
+    this.options = {
+      ...DEFAULT_OPTIONS,
+      ...this.deps.options
+    }
 
     this.setMethodBlacklist();
     this.setRouteWhitelist();
 
-    if (!(this.deps.options.defaultMetrics?.enabled === false)) {
+    if (!(this.options.defaultMetrics.enabled === false)) {
       this.collectDefaultMetrics();
     }
 
-    if (!(this.deps.options.routeMetrics?.enabled === false)) {
+    if (!(this.options.routeMetrics.enabled === false)) {
       this.routeMetrics = this.registerRouteMetrics();
       this.collectRouteMetrics();
     }
@@ -78,12 +64,12 @@ export class FastifyMetrics implements IFastifyMetrics {
   }
   /** Populates methods blacklist to exclude them from metrics collection */
   private setMethodBlacklist(): void {
-    if (this.deps.options.routeMetrics?.enabled === false) {
+    if (this.options.routeMetrics.enabled === false) {
       return;
     }
 
     (
-      this.deps.options.routeMetrics?.methodBlacklist ?? [
+      this.options.routeMetrics.methodBlacklist ?? [
         'HEAD',
         'OPTIONS',
         'TRACE',
@@ -97,22 +83,15 @@ export class FastifyMetrics implements IFastifyMetrics {
   /** Populates routes whitelist if */
   private setRouteWhitelist(): void {
     if (
-      this.deps.options.routeMetrics?.enabled === false ||
-      this.deps.options.routeMetrics?.registeredRoutesOnly === false
+      this.options.routeMetrics.enabled === false ||
+      this.options.routeMetrics.registeredRoutesOnly === false
     ) {
       return;
     }
 
     this.deps.fastify.addHook('onRoute', (routeOptions) => {
-      // routeOptions.method;
-      // routeOptions.schema;
-      // routeOptions.url; // the complete URL of the route, it will include the prefix if any
-      // routeOptions.path; // `url` alias
-      // routeOptions.routePath; // the URL of the route without the prefix
-      // routeOptions.prefix;
-
       if (
-        this.deps.options.routeMetrics?.routeBlacklist?.includes(
+        this.options.routeMetrics.routeBlacklist?.includes(
           routeOptions.url
         )
       ) {
@@ -122,7 +101,7 @@ export class FastifyMetrics implements IFastifyMetrics {
       [routeOptions.method].flat().forEach((method) => {
         if (!this.methodBlacklist.has(method)) {
           this.routesWhitelist.add(
-            FastifyMetrics.getRouteSlug({
+            getRouteSlug({
               method,
               url: routeOptions.url,
             })
@@ -138,11 +117,11 @@ export class FastifyMetrics implements IFastifyMetrics {
    * @returns Default metrics registry
    */
   private getCustomDefaultMetricsRegistries(): Registry[] {
-    const { defaultMetrics } = this.deps.options;
+    const { defaultMetrics } = this.options;
 
-    return defaultMetrics?.enabled === false ||
-      defaultMetrics?.register === undefined ||
-      defaultMetrics?.register === this.deps.client.register
+    return defaultMetrics.enabled === false ||
+      defaultMetrics.register === undefined ||
+      defaultMetrics.register === this.deps.client.register
       ? []
       : [defaultMetrics.register];
   }
@@ -153,13 +132,13 @@ export class FastifyMetrics implements IFastifyMetrics {
    * @returns Route metrics registry
    */
   private getCustomRouteMetricsRegistries(): Registry[] {
-    const { routeMetrics } = this.deps.options;
-    if (routeMetrics?.enabled === false) {
+    const { routeMetrics } = this.options;
+    if (routeMetrics.enabled === false) {
       return [];
     }
     return [
-      ...(routeMetrics?.overrides?.histogram?.registers ?? []),
-      ...(routeMetrics?.overrides?.summary?.registers ?? []),
+      ...(routeMetrics.overrides?.histogram?.registers ?? []),
+      ...(routeMetrics.overrides?.summary?.registers ?? []),
     ];
   }
 
@@ -178,7 +157,7 @@ export class FastifyMetrics implements IFastifyMetrics {
         const data = await regisitriesToMerge[0].metrics();
         return reply.type(regisitriesToMerge[0].contentType).send(data);
       }
-      // WARN: Looses default labels
+      // WARN: Loses default labels
       const merged = this.deps.client.Registry.merge(regisitriesToMerge);
 
       const data = await merged.metrics();
@@ -218,21 +197,21 @@ export class FastifyMetrics implements IFastifyMetrics {
   private registerRouteMetrics(): IRouteMetrics {
     const labelNames = {
       method:
-        this.deps.options.routeMetrics?.overrides?.labels?.method ?? 'method',
+        this.options.routeMetrics.overrides?.labels?.method ?? 'method',
       status:
-        this.deps.options.routeMetrics?.overrides?.labels?.status ??
+        this.options.routeMetrics.overrides?.labels?.status ??
         'status_code',
       route:
-        this.deps.options.routeMetrics?.overrides?.labels?.route ?? 'route',
+        this.options.routeMetrics.overrides?.labels?.route ?? 'route',
     };
 
     const routeHist = new this.deps.client.Histogram<string>({
-      ...this.deps.options.routeMetrics?.overrides?.histogram,
+      ...this.options.routeMetrics.overrides?.histogram,
       name:
-        this.deps.options.routeMetrics?.overrides?.histogram?.name ??
+        this.options.routeMetrics.overrides?.histogram?.name ??
         'http_request_duration_seconds',
       help:
-        this.deps.options.routeMetrics?.overrides?.histogram?.help ??
+        this.options.routeMetrics.overrides?.histogram?.help ??
         'request duration in seconds',
       labelNames: [
         labelNames.method,
@@ -241,12 +220,12 @@ export class FastifyMetrics implements IFastifyMetrics {
       ] as const,
     });
     const routeSum = new this.deps.client.Summary<string>({
-      ...this.deps.options.routeMetrics?.overrides?.summary,
+      ...this.options.routeMetrics.overrides?.summary,
       name:
-        this.deps.options.routeMetrics?.overrides?.summary?.name ??
+        this.options.routeMetrics.overrides?.summary?.name ??
         'http_request_summary_seconds',
       help:
-        this.deps.options.routeMetrics?.overrides?.summary?.help ??
+        this.options.routeMetrics.overrides?.summary?.help ??
         'request duration in seconds summary',
       labelNames: [
         labelNames.method,
@@ -260,77 +239,9 @@ export class FastifyMetrics implements IFastifyMetrics {
 
   /** Collect per-route metrics */
   private collectRouteMetrics(): void {
-    const { routeHist, routeSum, labelNames } = this.routeMetrics;
-
     this.deps.fastify
-      .addHook('onRequest', (request, _, done) => {
-        if (
-          request.context.config.disableMetrics === true ||
-          !request.raw.url
-        ) {
-          done();
-          return;
-        }
-
-        if (this.deps.options.routeMetrics?.registeredRoutesOnly === false) {
-          if (
-            !this.methodBlacklist.has(request.routerMethod ?? request.method)
-          ) {
-            this.metricStorage.set(request, {
-              hist: routeHist.startTimer(),
-              sum: routeSum.startTimer(),
-            });
-          }
-
-          done();
-          return;
-        }
-
-        if (
-          this.routesWhitelist.has(
-            FastifyMetrics.getRouteSlug({
-              method: request.routerMethod,
-              url: request.routerPath,
-            })
-          )
-        ) {
-          this.metricStorage.set(request, {
-            hist: routeHist.startTimer(),
-            sum: routeSum.startTimer(),
-          });
-        }
-
-        done();
-        return;
-      })
-      .addHook('onResponse', (request, reply, done) => {
-        const metrics = this.metricStorage.get(request);
-        if (!metrics) {
-          done();
-          return;
-        }
-
-        const statusCode =
-          this.deps.options.routeMetrics?.groupStatusCodes === true
-            ? `${Math.floor(reply.statusCode / 100)}xx`
-            : reply.statusCode;
-        const route =
-          request.context.config.statsId ??
-          request.routerPath ??
-          this.deps.options.routeMetrics?.invalidRouteGroup ??
-          '__unknown__';
-        const method = request.routerMethod ?? request.method;
-
-        const labels = {
-          [labelNames.method]: method,
-          [labelNames.route]: route,
-          [labelNames.status]: statusCode,
-        };
-        metrics.sum(labels);
-        metrics.hist(labels);
-
-        done();
-      });
+      .addHook('onRequest', requestMetricsCollector)
+      .addHook('onResponse', responseMetricsCollector);
   }
 
   /**
@@ -338,10 +249,10 @@ export class FastifyMetrics implements IFastifyMetrics {
    * register metrics in regisitries once again
    */
   public initMetricsInRegistry(): void {
-    if (!(this.deps.options.defaultMetrics?.enabled === false)) {
+    if (!(this.options.defaultMetrics.enabled === false)) {
       this.collectDefaultMetrics();
     }
-    if (!(this.deps.options.routeMetrics?.enabled === false)) {
+    if (!(this.options.routeMetrics.enabled === false)) {
       this.routeMetrics = this.registerRouteMetrics();
     }
   }

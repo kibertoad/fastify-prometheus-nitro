@@ -6,29 +6,33 @@
  * @packageDocumentation
  */
 
-import fastifyPlugin from 'fastify-plugin';
-import client from 'prom-client';
-import { FastifyMetrics } from './fastify-metrics';
+import fastifyPlugin from 'fastify-plugin'
+import client from 'prom-client'
+import { FastifyMetrics } from './fastify-metrics'
 import {
   IFastifyMetrics,
   IMetricsPluginOptions,
   IMetricsRouteContextConfig,
-} from './types';
+} from './types'
+import { FastifyInstance } from 'fastify'
 
 declare module 'fastify' {
   interface FastifyInstance {
     /** Metrics interface */
-    metrics: IFastifyMetrics;
+    promNitro: IFastifyMetrics
+  }
+  interface FastifyRequest {
+    promNitro: IFastifyMetrics
   }
   interface FastifyContextConfig extends IMetricsRouteContextConfig {
     /** Override route definition */
-    statsId?: string;
+    statsId?: string
     /** Disables metric collection on this route */
-    disableMetrics?: boolean;
+    disableMetrics?: boolean
   }
 }
 
-export * from './types';
+export * from './types'
 
 /**
  * Metric plugin
@@ -53,19 +57,21 @@ export * from './types';
  *      .listen(3000)
  * ```
  */
-export default fastifyPlugin<IMetricsPluginOptions>(
-  async (fastify, options) => {
-    const { name = 'metrics', clearRegisterOnInit = false } = options;
+export default fastifyPlugin<Partial<IMetricsPluginOptions>>(
+  (fastify: FastifyInstance, options: IMetricsPluginOptions, next: any) => {
+    const { clearRegisterOnInit = false } = options
 
     if (clearRegisterOnInit) {
-      client.register.clear();
+      client.register.clear()
     }
 
-    const fm = new FastifyMetrics({ client, fastify, options });
-    fastify.decorate<IFastifyMetrics>(name, fm);
+    const fm = new FastifyMetrics({ client, fastify, options })
+    fastify.decorate('promNitro', fm)
+    fastify.decorateRequest('promNitro', fm)
+    next()
   },
   {
     fastify: '>=4.0.0',
-    name: 'fastify-metrics',
-  }
-);
+    name: 'fastify-prometheus-nitro',
+  },
+)
