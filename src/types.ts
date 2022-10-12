@@ -1,9 +1,10 @@
-import { HTTPMethods, RouteOptions } from 'fastify';
+import {FastifyRequest, HTTPMethods, RouteOptions} from 'fastify';
 import client, {
   DefaultMetricsCollectorConfiguration,
   HistogramConfiguration,
   SummaryConfiguration,
 } from 'prom-client';
+import {IReqMetrics, IRouteMetrics} from "./types-internal";
 
 /**
  * Route config for metrics
@@ -195,14 +196,7 @@ export interface IMetricsPluginOptions {
    *
    * @defaultValue `/metrics`
    */
-  endpoint?: string | null | RouteOptions;
-
-  /**
-   * Plugin name that will be registered in fastify instance.
-   *
-   * @defaultValue `metrics`
-   */
-  name?: string;
+  endpoint: string | null | RouteOptions;
 
   /**
    * Default prom-client metrics config. Collect prometheus recommended and
@@ -210,21 +204,21 @@ export interface IMetricsPluginOptions {
    *
    * @defaultValue `{ enabled: true }`
    */
-  defaultMetrics?: IDefaultMetricsConfig;
+  defaultMetrics: IDefaultMetricsConfig;
 
   /**
    * Per route metrics config. Collect response time metric on requests
    *
    * @defaultValue `{ enabled: true }`
    */
-  routeMetrics?: IRouteMetricsConfig;
+  routeMetrics: IRouteMetricsConfig;
 
   /**
    * Clears the prom-client global registry before adding metrics. Default to `false`
    *
    * @defaultValue `false`
    */
-  clearRegisterOnInit?: boolean;
+  clearRegisterOnInit: boolean;
 }
 
 /**
@@ -235,6 +229,18 @@ export interface IMetricsPluginOptions {
 export interface IFastifyMetrics {
   /** Prom-client instance */
   client: typeof client;
+
+  routeMetrics: IRouteMetrics
+
+  options: IMetricsPluginOptions
+
+  readonly routesWhitelist: Set<string>
+  readonly methodBlacklist: Set<string>
+
+  metricStorage: WeakMap<
+      FastifyRequest,
+      IReqMetrics<string>
+  >;
   /**
    * Initialize metrics in registries. Useful if you call `registry.clear()` to
    * register metrics in regisitries once again

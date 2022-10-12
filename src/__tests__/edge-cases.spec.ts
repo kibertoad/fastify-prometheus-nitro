@@ -56,7 +56,7 @@ describe('edge cases', () => {
         ])
       );
 
-      app.metrics.client.register.clear();
+      app.promNitro.client.register.clear();
 
       await expect(
         app.inject({
@@ -77,7 +77,7 @@ describe('edge cases', () => {
       expect(linesAfterClear).toEqual(['', '']);
 
       // Reinit metrics in registry
-      app.metrics.initMetricsInRegistry();
+      app.promNitro.initMetricsInRegistry();
 
       await expect(
         app.inject({
@@ -115,7 +115,7 @@ describe('edge cases', () => {
       await app.register(fastifyPlugin, {
         endpoint: '/metrics',
       });
-      app.metrics.client.register.setDefaultLabels({ foo: 'bar' });
+      app.promNitro.client.register.setDefaultLabels({ foo: 'bar' });
       app.get('/test', async () => {
         return 'get test';
       });

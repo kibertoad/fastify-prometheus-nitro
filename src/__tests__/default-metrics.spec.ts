@@ -135,7 +135,7 @@ describe('default metrics', () => {
         }),
       });
 
-      const data = await app.metrics.client.register.metrics();
+      const data = await app.promNitro.client.register.metrics();
 
       const lines = data.split('\n');
 

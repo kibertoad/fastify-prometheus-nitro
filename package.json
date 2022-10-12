@@ -9,10 +9,11 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "benchmark:start": "node benchmark/launch.js",
+    "benchmark:start": "npm run build && node benchmark/launch.js",
     "benchmark:measure-as-1": "node benchmark/autocannon.js -o 1",
     "benchmark:measure-as-2": "node benchmark/autocannon.js -o 2",
     "benchmark:measure-as-3": "node benchmark/autocannon.js -o 3",
+    "benchmark:measure-as-3-control": "node benchmark/autocannon.js -o 3b",
     "example:ts": "ts-node examples/example.ts",
     "lint": "eslint .",
     "format": "prettier benchmark",
