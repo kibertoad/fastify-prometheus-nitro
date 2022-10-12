@@ -1,0 +1,16 @@
+.github/
+.vscode/
+coverage/
+docs/
+examples/
+src/
+.*
+*config.js*
+*.md
+logo.*
+**/*.spec.*
+**/__tests__/
+**/__mocks__/
+**/__snapshots__/
+api-extractor.json
+temp/
