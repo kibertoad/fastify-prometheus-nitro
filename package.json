@@ -9,16 +9,16 @@
     "fastify",
     "plugin"
   ],
-  "homepage": "https://github.com/SkeLLLa/fastify-metrics/blob/master/README.md",
+  "homepage": "https://github.com/kibertoad/fastify-prometheus-nitro/blob/master/README.md",
   "bugs": {
-    "url": "https://github.com/SkeLLLa/fastify-metrics/issues"
+    "url": "https://github.com/kibertoad/fastify-prometheus-nitro/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/SkeLLLa/fastify-metrics.git"
+    "url": "https://github.com/kibertoad/fastify-prometheus-nitro.git"
   },
   "license": "MIT",
-  "author": "m03geek",
+  "author": "kibertoad",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,44 +31,27 @@
   "scripts": {
     "build": "pnpm run build:node",
     "build:node": "tsc -p tsconfig.json",
-    "docs": "pnpm run build && api-extractor run -l && api-documenter markdown -i ./temp -o ./docs && pretty-quick",
     "example:ts": "ts-node examples/example.ts",
-    "get-changelog": "conventional-changelog -r 2 -p angular",
     "lint": "eslint .",
-    "release": "pnpm run docs && git add -A && standard-version -a",
     "test": "pnpm audit --production && pnpm run lint && pnpm run unit",
     "unit": "jest",
-    "version:update": "echo v$npm_package_version > VERSION"
   },
   "dependencies": {
-    "fastify-plugin": "^4.2.0",
-    "prom-client": "^14.0.1"
+    "fastify-plugin": "^4.2.1",
+    "prom-client": "^14.1.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "^17.0.3",
-    "@commitlint/config-conventional": "^17.0.3",
-    "@jest/globals": "^28.1.3",
-    "@microsoft/api-documenter": "^7.19.5",
-    "@microsoft/api-extractor": "^7.29.3",
-    "@types/node": "^18.7.8",
-    "@typescript-eslint/eslint-plugin": "^5.33.1",
-    "@typescript-eslint/parser": "^5.33.1",
-    "conventional-changelog-cli": "^2.2.2",
-    "eslint": "^8.22.0",
-    "eslint-config-google": "^0.14.0",
+    "@types/node": "^18.8.4",
+    "@typescript-eslint/eslint-plugin": "^5.40.0",
+    "@typescript-eslint/parser": "^5.40.0",
+    "eslint": "^8.25.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-jest": "^26.8.4",
     "eslint-plugin-prettier": "^4.2.1",
-    "eslint-plugin-tsdoc": "^0.2.16",
-    "fastify": "^4.5.2",
-    "husky": "^8.0.1",
+    "fastify": "^4.8.1",
     "jest": "^28.1.3",
     "prettier": "^2.7.1",
-    "prettier-plugin-jsdoc": "^0.3.38",
-    "prettier-plugin-organize-imports": "^3.1.0",
-    "prettier-plugin-packagejson": "^2.2.18",
-    "prettier-plugin-sort-json": "0.0.3",
     "pretty-quick": "^3.1.3",
     "standard-version": "^9.5.0",
     "ts-jest": "^28.0.8",
